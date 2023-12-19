@@ -30,6 +30,7 @@ class AttachmentQueue(models.Model):
     )
     file_type = fields.Selection(
         selection=[],
+        index="btree",
         help="The file type determines an import method to be used "
         "to parse and transform data before their import in ERP or an export",
     )
@@ -39,6 +40,7 @@ class AttachmentQueue(models.Model):
         readonly=False,
         required=True,
         default="pending",
+        index="btree",
     )
     state_message = fields.Text()
     failure_emails = fields.Char(
@@ -96,9 +98,7 @@ class AttachmentQueue(models.Model):
             self.run()
 
     def run_as_job(self):
-        """
-        Run the process for an individual attachment queue from a async job
-        """
+        """Run the process for an individual attachment queue from a async job"""
         try:
             self._cr.execute(
                 """
