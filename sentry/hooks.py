@@ -144,7 +144,8 @@ def initialize_sentry(config):
 
     with sentry_sdk.push_scope() as scope:
         scope.set_extra("debug", False)
-        sentry_sdk.capture_message("Starting Odoo Server", "info")
+        # Quatra: disable welcome message as it is logged 600+ times a day on Odoo.sh
+        # sentry_sdk.capture_message("Starting Odoo Server", "info")
 
     return client
 
