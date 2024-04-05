@@ -2,6 +2,7 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
 import logging
+import os
 import sys
 from unittest.mock import patch
 
@@ -76,14 +77,15 @@ class TestClientSetup(TransactionCase):
     def setUp(self):
         super().setUp()
         self.dsn = "http://public:secret@example.com/1"
+        os.environ["ODOO_STAGE"] = "staging"
         self.patch_config(
             {
-                "sentry_enabled": True,
+                "sentry_staging_enabled": True,
                 "sentry_dsn": self.dsn,
                 "sentry_logging_level": "error",
             }
         )
-        self.client = initialize_sentry(config)._client
+        self.client = initialize_sentry()._client
         self.client.transport = InMemoryTransport({"dsn": self.dsn})
 
         # Setup our own logger so we don't flood stderr with error logs
@@ -153,7 +155,7 @@ class TestClientSetup(TransactionCase):
                 "sentry_ignore_exceptions": "odoo.exceptions.UserError",
             }
         )
-        client = initialize_sentry(config)._client
+        client = initialize_sentry()._client
         client.transport = InMemoryTransport({"dsn": self.dsn})
         level, msg = logging.ERROR, "Test exception"
         try:
@@ -167,7 +169,7 @@ class TestClientSetup(TransactionCase):
     def test_capture_exceptions_with_no_exc_info(self):
         """A UserError that isn't in the DEFAULT_IGNORED_EXCEPTIONS list is captured
         (there is no exc_info in the ValidationError exception)."""
-        client = initialize_sentry(config)._client
+        client = initialize_sentry()._client
         client.transport = InMemoryTransport({"dsn": self.dsn})
         level, msg = logging.ERROR, "Test exception"
 
@@ -181,7 +183,7 @@ class TestClientSetup(TransactionCase):
     def test_ignore_exceptions_with_no_exc_info(self):
         """A UserError that is in the DEFAULT_IGNORED_EXCEPTIONS is not captured
         (there is no exc_info in the ValidationError exception)."""
-        client = initialize_sentry(config)._client
+        client = initialize_sentry()._client
         client.transport = InMemoryTransport({"dsn": self.dsn})
         level, msg = logging.ERROR, "Test exception"
 
@@ -198,7 +200,7 @@ class TestClientSetup(TransactionCase):
                 "sentry_exclude_loggers": self.logger.name,
             }
         )
-        client = initialize_sentry(config)._client
+        client = initialize_sentry()._client
         client.transport = InMemoryTransport({"dsn": self.dsn})
         level, msg = logging.ERROR, f"Test exclude logger {__name__}"
         self.log(level, msg)
@@ -213,7 +215,7 @@ class TestClientSetup(TransactionCase):
                 "sentry_logging_level": "foo_bar",
             }
         )
-        client = initialize_sentry(config)._client
+        client = initialize_sentry()._client
         client.transport = InMemoryTransport({"dsn": self.dsn})
         level, msg = logging.WARNING, "Test we use the default"
         self.log(level, msg)
@@ -226,7 +228,7 @@ class TestClientSetup(TransactionCase):
     @patch("odoo.addons.sentry.hooks.get_odoo_commit", return_value=GIT_SHA)
     def test_config_odoo_dir(self, get_odoo_commit):
         self.patch_config({"sentry_odoo_dir": "/opt/odoo/core"})
-        client = initialize_sentry(config)._client
+        client = initialize_sentry()._client
 
         self.assertEqual(
             client.options["release"],
@@ -242,7 +244,7 @@ class TestClientSetup(TransactionCase):
                 "sentry_release": RELEASE,
             }
         )
-        client = initialize_sentry(config)._client
+        client = initialize_sentry()._client
 
         self.assertEqual(
             client.options["release"],
