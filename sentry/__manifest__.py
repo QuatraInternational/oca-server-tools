@@ -17,7 +17,8 @@
     "installable": True,
     "external_dependencies": {
         "python": [
-            "sentry_sdk>=1.17.0",
+            # Quatra: pin sentry_sdk version
+            "sentry_sdk==1.17.0",
         ]
     },
     "depends": [
