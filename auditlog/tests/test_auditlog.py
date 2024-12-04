@@ -3,7 +3,7 @@
 # © 2021 Stefan Rijnhart <stefan@opener.amsterdam>
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 from odoo.exceptions import ValidationError
-from odoo.tests.common import Form, TransactionCase
+from odoo.tests.common import TransactionCase
 
 from odoo.addons.base.models.ir_model import MODULE_UNINSTALL_FLAG
 from odoo.addons.base.models.res_users import name_boolean_group
@@ -51,11 +51,15 @@ class AuditlogCommon(object):
 
         self.groups_rule.subscribe()
         auditlog_log = self.env["auditlog.log"]
-        testgroup3 = testgroup3 = self.env["res.groups"].create({"name": "testgroup3"})
-        testgroup4 = self.env["res.groups"].create(
-            {"name": "testgroup4", "implied_ids": [(4, testgroup3.id)]}
+        testgroup3 = self.env["res.groups"].create({"name": "testgroup3"})
+        testgroup4 = self.env["res.groups"].create({"name": "testgroup4"})
+        testgroup5 = self.env["res.groups"].create(
+            {
+                "name": "testgroup5",
+                "implied_ids": [(4, testgroup3.id), (4, testgroup4.id)],
+            }
         )
-        testgroup4.write({"implied_ids": [(2, testgroup3.id)]})
+        testgroup5.write({"implied_ids": [(2, testgroup3.id)]})
         self.assertTrue(
             auditlog_log.search(
                 [
@@ -70,7 +74,7 @@ class AuditlogCommon(object):
                 [
                     ("model_id", "=", self.groups_model_id),
                     ("method", "=", "create"),
-                    ("res_id", "=", testgroup4.id),
+                    ("res_id", "=", testgroup5.id),
                 ]
             ).ensure_one()
         )
@@ -79,7 +83,7 @@ class AuditlogCommon(object):
                 [
                     ("model_id", "=", self.groups_model_id),
                     ("method", "=", "write"),
-                    ("res_id", "=", testgroup4.id),
+                    ("res_id", "=", testgroup5.id),
                 ]
             ).ensure_one()
         )
@@ -207,7 +211,14 @@ class AuditlogCommon(object):
     def test_LogUpdate(self):
         """Tests write results with different M2O values."""
         self.groups_rule.subscribe()
-        group = self.env["res.groups"].create({"name": "testgroup1"})
+        testgroup3 = self.env["res.groups"].create({"name": "testgroup3"})
+        testgroup4 = self.env["res.groups"].create({"name": "testgroup4"})
+        group = self.env["res.groups"].create(
+            {
+                "name": "testgroup1",
+                "implied_ids": [(4, testgroup3.id), (4, testgroup4.id)],
+            }
+        )
         cat = self.env["ir.module.category"].create({"name": "Test Category"})
         group.write(
             {
@@ -263,7 +274,7 @@ class AuditlogCommon(object):
 
 class TestAuditlogFull(TransactionCase, AuditlogCommon):
     def setUp(self):
-        super(TestAuditlogFull, self).setUp()
+        super().setUp()
         self.groups_model_id = self.env.ref("base.model_res_groups").id
         self.groups_rule = self.env["auditlog.rule"].create(
             {
@@ -279,12 +290,12 @@ class TestAuditlogFull(TransactionCase, AuditlogCommon):
 
     def tearDown(self):
         self.groups_rule.unlink()
-        super(TestAuditlogFull, self).tearDown()
+        super().tearDown()
 
 
 class TestAuditlogFast(TransactionCase, AuditlogCommon):
     def setUp(self):
-        super(TestAuditlogFast, self).setUp()
+        super().setUp()
         self.groups_model_id = self.env.ref("base.model_res_groups").id
         self.groups_rule = self.env["auditlog.rule"].create(
             {
@@ -300,7 +311,7 @@ class TestAuditlogFast(TransactionCase, AuditlogCommon):
 
     def tearDown(self):
         self.groups_rule.unlink()
-        super(TestAuditlogFast, self).tearDown()
+        super().tearDown()
 
 
 class TestFieldRemoval(TransactionCase):
@@ -399,7 +410,7 @@ class TestFieldRemoval(TransactionCase):
 
 class TestAuditlogFullCaptureRecord(TransactionCase, AuditlogCommon):
     def setUp(self):
-        super(TestAuditlogFullCaptureRecord, self).setUp()
+        super().setUp()
         self.groups_model_id = self.env.ref("base.model_res_groups").id
         self.groups_rule = self.env["auditlog.rule"].create(
             {
@@ -416,13 +427,13 @@ class TestAuditlogFullCaptureRecord(TransactionCase, AuditlogCommon):
 
     def tearDown(self):
         self.groups_rule.unlink()
-        super(TestAuditlogFullCaptureRecord, self).tearDown()
+        super().tearDown()
 
 
 class AuditLogRuleTestForUserFields(TransactionCase):
     @classmethod
     def setUpClass(cls):
-        super(AuditLogRuleTestForUserFields, cls).setUpClass()
+        super().setUpClass()
         # get Contact model id
         cls.contact_model_id = (
             cls.env["ir.model"].search([("model", "=", "res.partner")]).id
@@ -575,9 +586,7 @@ class AuditLogRuleTestForUserFields(TransactionCase):
     def test_02_AuditlogFull_field_exclude_write_log(self):
         # Checking fields_to_exclude_ids
         self.testpartner1.with_context(tracking_disable=True).write(
-            {
-                "phone": "1234567890",
-            }
+            {"phone": "1234567890"}
         )
         # Checking log is created for testpartner1
         write_log_record = self.auditlog_log.search(
@@ -594,14 +603,11 @@ class AuditLogRuleTestForUserFields(TransactionCase):
         self.assertTrue("phone" not in field_names)
 
     def test_03_AuditlogFull_user_exclude_write_log(self):
-        # Update email in Form view with excluded user
-        partner_form = Form(
-            self.testpartner1.with_user(self.user.id).with_context(
-                tracking_disable=True
-            )
+        # Update email with excluded user
+        partner = self.testpartner1.with_user(self.user.id).with_context(
+            tracking_disable=True
         )
-        partner_form.email = "vendor@mail.com"
-        testpartner1 = partner_form.save()
+        partner.email = "vendor@mail.com"
 
         # Checking write log not created
         with self.assertRaises(ValueError):
@@ -609,7 +615,7 @@ class AuditLogRuleTestForUserFields(TransactionCase):
                 [
                     ("model_id", "=", self.auditlog_rule.model_id.id),
                     ("method", "=", "write"),
-                    ("res_id", "=", testpartner1.id),
+                    ("res_id", "=", partner.id),
                     ("user_id", "=", self.user.id),
                 ]
             ).ensure_one()
@@ -734,9 +740,6 @@ class AuditLogRuleTestForUserModel(TransactionCase):
             )
         )
 
-        # Subscribe auditlog.rule
-        cls.auditlog_rule.subscribe()
-
         # Create user id
         cls.user = (
             cls.env["res.users"]
@@ -751,6 +754,8 @@ class AuditLogRuleTestForUserModel(TransactionCase):
         cls.group = cls.env.ref("auditlog.group_auditlog_manager")
 
         cls.auditlog_log = cls.env["auditlog.log"]
+        # Subscribe auditlog.rule
+        cls.auditlog_rule.subscribe()
 
     def test_01_AuditlogFull_field_group_write_log(self):
         """Change group and check successfully created log"""
@@ -869,3 +874,75 @@ class AuditLogRuleTestPartnerCompanyDependentFields(TransactionCase):
 
         # Checking log lines not created for phone
         self.assertTrue("barcode" in field_names)
+
+
+class AuditlogFast_excluded_fields(TransactionCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # get Contact model id
+        cls.contact_model_id = (
+            cls.env["ir.model"].search([("model", "=", "res.partner")]).id
+        )
+
+        # get phone field id
+        cls.fields_to_exclude_ids = (
+            cls.env["ir.model.fields"]
+            .search([("model", "=", "res.partner"), ("name", "=", "phone")])
+            .id
+        )
+        # creating auditlog.rule
+        cls.auditlog_rule = (
+            cls.env["auditlog.rule"]
+            .with_context(tracking_disable=True)
+            .create(
+                {
+                    "name": "testrule 01",
+                    "model_id": cls.contact_model_id,
+                    "log_read": True,
+                    "log_create": True,
+                    "log_write": True,
+                    "log_unlink": True,
+                    "log_type": "fast",
+                    "capture_record": True,
+                }
+            )
+        )
+
+        # Updating phone in fields_to_exclude_ids
+        cls.auditlog_rule.fields_to_exclude_ids = [[4, cls.fields_to_exclude_ids]]
+
+        # Subscribe auditlog.rule
+        cls.auditlog_rule.subscribe()
+
+        cls.auditlog_log = cls.env["auditlog.log"]
+
+        # Creating new res.partner
+        cls.testpartner1 = (
+            cls.env["res.partner"]
+            .with_context(tracking_disable=True)
+            .create(
+                {
+                    "name": "testpartner1",
+                    "phone": "123",
+                }
+            )
+        )
+
+    def test_01_AuditlogFast_field_exclude_write_log(self):
+        # Checking fields_to_exclude_ids
+        self.testpartner1.with_context(tracking_disable=True).write(
+            {
+                "phone": "1234567890",
+            }
+        )
+        # Checking log is created for testpartner1
+        self.assertFalse(
+            self.auditlog_log.search(
+                [
+                    ("model_id", "=", self.auditlog_rule.model_id.id),
+                    ("method", "=", "write"),
+                    ("res_id", "=", self.testpartner1.id),
+                ]
+            )
+        )
