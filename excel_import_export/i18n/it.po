@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 14.0\n"
 "Report-Msgid-Bugs-To: \n"
-"PO-Revision-Date: 2024-05-28 09:34+0000\n"
+"PO-Revision-Date: 2025-01-16 16:06+0000\n"
 "Last-Translator: mymage <stefano.consolaro@mymage.it>\n"
 "Language-Team: none\n"
 "Language: it\n"
@@ -14,7 +14,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 4.17\n"
+"X-Generator: Weblate 5.6.2\n"
 
 #. module: excel_import_export
 #: model_terms:ir.ui.view,arch_db:excel_import_export.view_xlsx_template_form
@@ -434,7 +434,7 @@ msgstr "Modifiche dell'insieme di modifiche"
 #: model:ir.model.fields,field_description:excel_import_export.field_xlsx_template_export__changeset_ids
 #: model:ir.model.fields,field_description:excel_import_export.field_xlsx_template_import__changeset_ids
 msgid "Changesets"
-msgstr "Insieme di modifiche"
+msgstr "Insiemi di modifiche"
 
 #. module: excel_import_export
 #: model:ir.model.fields.selection,name:excel_import_export.selection__export_xlsx_wizard__state__choose
@@ -505,7 +505,7 @@ msgstr "Converto in CSV?"
 #: model:ir.model.fields,field_description:excel_import_export.field_xlsx_template_export__count_changesets
 #: model:ir.model.fields,field_description:excel_import_export.field_xlsx_template_import__count_changesets
 msgid "Count Changesets"
-msgstr "Conteggio insieme di modifiche"
+msgstr "Conta insiemi di modifiche"
 
 #. module: excel_import_export
 #: model:ir.model.fields,field_description:excel_import_export.field_export_xlsx_wizard__count_pending_changeset_changes
@@ -763,7 +763,7 @@ msgstr "File \"%(fname)s\" non trovato nello schema, %(name)s."
 #. module: excel_import_export
 #: model:ir.model.fields,field_description:excel_import_export.field_xlsx_template__datas
 msgid "File Content"
-msgstr "Contenuto File"
+msgstr "Contenuto file"
 
 #. module: excel_import_export
 #: model:ir.model.fields,field_description:excel_import_export.field_export_xlsx_wizard__name
@@ -1375,7 +1375,7 @@ msgstr "Somma"
 #: model:ir.model.fields,field_description:excel_import_export.field_import_xlsx_wizard__template_id
 #: model:ir.model.fields,field_description:excel_import_export.field_xlsx_report__template_id
 msgid "Template"
-msgstr "Schema"
+msgstr "Modello"
 
 #. module: excel_import_export
 #. odoo-python
@@ -1388,7 +1388,7 @@ msgstr "Lo schema %(report_name)s nel modello %(model)s non è univoco!"
 #: model:ir.model.fields,field_description:excel_import_export.field_import_xlsx_wizard__fname
 #: model:ir.model.fields,field_description:excel_import_export.field_xlsx_template__name
 msgid "Template Name"
-msgstr "Nome schema"
+msgstr "Nome modello"
 
 #. module: excel_import_export
 #. odoo-python
@@ -1442,7 +1442,7 @@ msgstr "Numero di modifiche di questo record in attesa"
 #: model:ir.model.fields,help:excel_import_export.field_xlsx_template_export__count_pending_changesets
 #: model:ir.model.fields,help:excel_import_export.field_xlsx_template_import__count_pending_changesets
 msgid "The number of pending changesets of this record"
-msgstr "Numero di insieme di modifiche di questo record in attesa"
+msgstr "Numero di insiemi di modifiche in attesa di questo record"
 
 #. module: excel_import_export
 #: model:ir.model.fields,help:excel_import_export.field_export_xlsx_wizard__count_changesets
@@ -1457,7 +1457,7 @@ msgstr "Numero di insieme di modifiche di questo record in attesa"
 #: model:ir.model.fields,help:excel_import_export.field_xlsx_template_export__count_changesets
 #: model:ir.model.fields,help:excel_import_export.field_xlsx_template_import__count_changesets
 msgid "The overall number of changesets of this record"
-msgstr "Il numero totale di insieme di modifiche di questo record"
+msgstr "Numero totale di insiemi di modifiche di questo record"
 
 #. module: excel_import_export
 #. odoo-python
@@ -1478,6 +1478,19 @@ msgstr ""
 "generazione. HTML vuol dire che il resoconto sarà aperto direttamente nel "
 "tuo browser mentre PDF vuol dire che il resoconto sarà generato usando "
 "Wkhtmltopdf e scaricato dall'utente."
+
+#. module: excel_import_export
+#. odoo-python
+#: code:addons/excel_import_export/models/xlsx_import.py:0
+#, python-format
+msgid ""
+"The value for the '%(field)s' field is expected to be in cell "
+"%(cell_position)s, but no column exists for that cell in the Excel sheet. "
+"Please check your Excel file."
+msgstr ""
+"Il valore per il campo '%(field)s' dovrebbe essere nella cella "
+"%(cell_position)s, ma non esiste alcuna colonna per quella cella nel foglio "
+"Excel. Controllare il file Excel."
 
 #. module: excel_import_export
 #. odoo-python
