@@ -2,6 +2,7 @@
 # © 2018 Pieter Paulussen <pieter_paulussen@me.com>
 # © 2021 Stefan Rijnhart <stefan@opener.amsterdam>
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+from odoo.exceptions import ValidationError
 from odoo.tests.common import Form, TransactionCase
 
 from odoo.addons.base.models.ir_model import MODULE_UNINSTALL_FLAG
@@ -427,10 +428,20 @@ class AuditLogRuleTestForUserFields(TransactionCase):
             cls.env["ir.model"].search([("model", "=", "res.partner")]).id
         )
 
+        # Get User model id
+        cls.user_model_id = cls.env["ir.model"].search([("model", "=", "res.users")]).id
+
         # get phone field id
         cls.fields_to_exclude_ids = (
             cls.env["ir.model.fields"]
             .search([("model", "=", "res.partner"), ("name", "=", "phone")])
+            .id
+        )
+
+        # get login field id
+        cls.fields_to_include_ids = (
+            cls.env["ir.model.fields"]
+            .search([("model", "=", "res.users"), ("name", "=", "login")])
             .id
         )
 
@@ -476,14 +487,34 @@ class AuditLogRuleTestForUserFields(TransactionCase):
             )
         )
 
+        cls.auditlog_rule2 = (
+            cls.env["auditlog.rule"]
+            .with_context(tracking_disable=True)
+            .create(
+                {
+                    "name": "testrule 02",
+                    "model_id": cls.user_model_id,
+                    "log_read": True,
+                    "log_create": True,
+                    "log_write": True,
+                    "log_unlink": True,
+                    "log_type": "full",
+                    "capture_record": True,
+                }
+            )
+        )
+
         # Updating phone in fields_to_exclude_ids
         cls.auditlog_rule.fields_to_exclude_ids = [[4, cls.fields_to_exclude_ids]]
+        # Updating login in fields_to_include_ids
+        cls.auditlog_rule2.fields_to_include_ids = [[4, cls.fields_to_include_ids]]
 
         # Updating users_to_exclude_ids
         cls.auditlog_rule.users_to_exclude_ids = [[4, cls.users_to_exclude_ids]]
 
         # Subscribe auditlog.rule
         cls.auditlog_rule.subscribe()
+        cls.auditlog_rule2.subscribe()
 
         cls.auditlog_log = cls.env["auditlog.log"]
 
@@ -507,6 +538,18 @@ class AuditLogRuleTestForUserFields(TransactionCase):
             .create(
                 {
                     "name": "testpartner2",
+                }
+            )
+        )
+
+        # Creating new res.user
+        cls.testuser = (
+            cls.env["res.users"]
+            .with_context(no_reset_password=True, tracking_disable=True)
+            .create(
+                {
+                    "name": "Test User",
+                    "login": "testuserInclude",
                 }
             )
         )
@@ -614,6 +657,57 @@ class AuditLogRuleTestForUserFields(TransactionCase):
         # Removing auditlog_rule
         self.auditlog_rule.unlink()
 
+    def test_07_AuditlogFull_field_include_create_log(self):
+        # Checking log is created for testuser1
+        create_log_record = self.auditlog_log.search(
+            [
+                ("model_id", "=", self.auditlog_rule2.model_id.id),
+                ("method", "=", "create"),
+                ("res_id", "=", self.testuser.id),
+            ]
+        ).ensure_one()
+        self.assertTrue(create_log_record)
+        field_names = create_log_record.line_ids.mapped("field_name")
+
+        # Checking log lines are created for login
+        self.assertIn("login", field_names)
+        self.assertNotIn("name", field_names)
+
+        # Removing created log record
+        create_log_record.unlink()
+
+    def test_08_AuditlogFull_field_include_write_log(self):
+        # Checking fields_to_include_ids
+        self.testuser.with_context(tracking_disable=True).write(
+            {
+                "login": "newtestuserInclude",
+            }
+        )
+        # Checking log is created for testpartner1
+        write_log_record = self.auditlog_log.search(
+            [
+                ("model_id", "=", self.auditlog_rule2.model_id.id),
+                ("method", "=", "write"),
+                ("res_id", "=", self.testuser.id),
+            ]
+        ).ensure_one()
+        self.assertTrue(write_log_record)
+        field_names = write_log_record.line_ids.mapped("field_name")
+
+        # Checking log lines are created for login
+        self.assertIn("login", field_names)
+        self.assertNotIn("name", field_names)
+
+    def test_09_AuditlogFull_field_include_exclude_error(self):
+        # fields_to_exclude_ids and fields_to_include_ids may not be enabled at the same time
+        with self.assertRaises(ValidationError):
+            self.auditlog_rule2.write(
+                {
+                    "fields_to_exclude_ids": [(4, self.fields_to_exclude_ids)],
+                    "fields_to_include_ids": [(4, self.fields_to_include_ids)],
+                }
+            )
+
 
 class AuditLogRuleTestForUserModel(TransactionCase):
     @classmethod
@@ -691,3 +785,87 @@ class AuditLogRuleTestForUserModel(TransactionCase):
             ]
         ).ensure_one()
         self.assertTrue(write_log_record)
+
+
+class AuditLogRuleTestPartnerCompanyDependentFields(TransactionCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # get Contact model id
+        cls.contact_model_id = (
+            cls.env["ir.model"].search([("model", "=", "res.partner")]).id
+        )
+
+        # creating auditlog.rule
+        cls.auditlog_rule = (
+            cls.env["auditlog.rule"]
+            .with_context(tracking_disable=True)
+            .create(
+                {
+                    "name": "testrule 01",
+                    "model_id": cls.contact_model_id,
+                    "log_read": True,
+                    "log_create": True,
+                    "log_write": True,
+                    "log_unlink": True,
+                    "log_type": "full",
+                    "capture_record": True,
+                }
+            )
+        )
+
+        # Subscribe auditlog.rule
+        cls.auditlog_rule.subscribe()
+
+        cls.auditlog_log = cls.env["auditlog.log"]
+
+        # Creating new res.partner
+        cls.testpartner = (
+            cls.env["res.partner"]
+            .with_context(tracking_disable=True)
+            .create(
+                {
+                    "name": "testpartner",
+                    "barcode": "0000",
+                }
+            )
+        )
+
+    def test_01_AuditlogFull_company_dependent_field_create_log(self):
+        """Checks that the changes in a company dependent field are tracked"""
+        create_log_record = self.auditlog_log.search(
+            [
+                ("model_id", "=", self.auditlog_rule.model_id.id),
+                ("method", "=", "create"),
+                ("res_id", "=", self.testpartner.id),
+            ]
+        ).ensure_one()
+        self.assertTrue(create_log_record)
+        field_names = create_log_record.line_ids.mapped("field_name")
+
+        # Checking log lines created for barcode
+        self.assertTrue("barcode" in field_names)
+
+        # Removing created log record
+        create_log_record.unlink()
+
+    def test_02_AuditlogFull_company_dependent_field_write_log(self):
+        """Checks that the changes in a company dependent field are tracked"""
+        self.testpartner.with_context(tracking_disable=True).write(
+            {
+                "barcode": "0001",
+            }
+        )
+        # Checking log is created for testpartner1
+        write_log_record = self.auditlog_log.search(
+            [
+                ("model_id", "=", self.auditlog_rule.model_id.id),
+                ("method", "=", "write"),
+                ("res_id", "=", self.testpartner.id),
+            ]
+        ).ensure_one()
+        self.assertTrue(write_log_record)
+        field_names = write_log_record.line_ids.mapped("field_name")
+
+        # Checking log lines not created for phone
+        self.assertTrue("barcode" in field_names)
