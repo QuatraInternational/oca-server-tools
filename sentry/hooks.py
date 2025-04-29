@@ -2,6 +2,7 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
 import logging
+import os
 import warnings
 from collections import abc
 
@@ -53,6 +54,15 @@ def before_send(event, hint):
         if qualified_name in const.DEFAULT_IGNORED_EXCEPTIONS:
             return None
 
+        # Check if the logger is muted
+        try:
+            logger_name = hint["log_record"].name
+        except AttributeError:
+            logger_name = None
+
+        if logger_name and not logging.getLogger(logger_name).propagate:
+            return None
+
     if event.setdefault("tags", {})["include_context"]:
         cxtest = get_extra_context(odoo.http.request)
         info_request = ["tags", "user", "extra", "request"]
@@ -77,21 +87,34 @@ def get_odoo_commit(odoo_dir):
         _logger.debug("Odoo directory: '%s' not a valid git repository", odoo_dir)
 
 
-def initialize_sentry(config):
+def get_config(key, default=None):
+    """Get the configuration parameter composed of `sentry_` + key
+
+    Allow to distinguish by environment as indicated by the environment
+    variable ODOO_STAGE (available on Odoo.sh).
+    """
+    stage = os.environ.get("ODOO_STAGE", "nostage")  # either production or staging
+    return odoo_config.get(
+        f"sentry_{stage}_{key}",
+        odoo_config.get(f"sentry_{key}", default),
+    )
+
+
+def initialize_sentry():
     """Setup an instance of :class:`sentry_sdk.Client`.
     :param config: Sentry configuration
     :param client: class used to instantiate the sentry_sdk client.
     """
-    enabled = config.get("sentry_enabled", False)
+    enabled = get_config("enabled", False)
     if not (HAS_SENTRY_SDK and enabled):
         return
     _logger.info("Initializing sentry...")
-    if config.get("sentry_odoo_dir") and config.get("sentry_release"):
+    if get_config("odoo_dir") and get_config("release"):
         _logger.debug(
             "Both sentry_odoo_dir and \
                        sentry_release defined, choosing sentry_release"
         )
-    if config.get("sentry_transport"):
+    if get_config("transport"):
         warnings.warn(
             "`sentry_transport` has been deprecated.  "
             "Its not neccesary send it, will use `HttpTranport` by default.",
@@ -100,18 +123,18 @@ def initialize_sentry(config):
         )
     options = {}
     for option in const.get_sentry_options():
-        value = config.get(f"sentry_{option.key}", option.default)
+        value = get_config(option.key, option.default)
         if isinstance(option.converter, abc.Callable):
             value = option.converter(value)
         options[option.key] = value
 
     exclude_loggers = const.split_multiple(
-        config.get("sentry_exclude_loggers", const.DEFAULT_EXCLUDE_LOGGERS)
+        get_config("exclude_loggers", const.DEFAULT_EXCLUDE_LOGGERS)
     )
 
     if not options.get("release"):
-        options["release"] = config.get(
-            "sentry_release", get_odoo_commit(config.get("sentry_odoo_dir"))
+        options["release"] = get_config(
+            "release", get_odoo_commit(get_config("odoo_dir"))
         )
 
     # Change name `ignore_exceptions` (with raven)
@@ -130,7 +153,7 @@ def initialize_sentry(config):
 
     client = sentry_sdk.init(**options)
 
-    sentry_sdk.set_tag("include_context", config.get("sentry_include_context", True))
+    sentry_sdk.set_tag("include_context", get_config("include_context", True))
 
     if exclude_loggers:
         for item in exclude_loggers:
@@ -145,10 +168,11 @@ def initialize_sentry(config):
 
     with sentry_sdk.new_scope() as scope:
         scope.set_extra("debug", False)
-        sentry_sdk.capture_message("Starting Odoo Server", "info")
+        # Quatra: disable welcome message as it is logged 600+ times a day on Odoo.sh
+        # sentry_sdk.capture_message("Starting Odoo Server", "info")
 
     return client
 
 
 def post_load():
-    initialize_sentry(odoo_config)
+    initialize_sentry()
