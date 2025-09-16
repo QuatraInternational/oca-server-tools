@@ -131,6 +131,14 @@ class AuditlogRule(models.Model):
         string="Users to Exclude",
         context={"active_test": False},
     )
+    users_to_include_ids = fields.Many2many(
+        "res.users",
+        string="Users to Include",
+        context={"active_test": False},
+        relation="auditlog_rule_res_users_include_rel",
+        column1="rule_id",
+        column2="user_id",
+    )
 
     fields_to_exclude_ids = fields.Many2many(
         "ir.model.fields",
@@ -165,6 +173,17 @@ class AuditlogRule(models.Model):
                     _(
                         "You can only set up 'Fields to Exclude' "
                         "or 'Fields to Include', not both."
+                    )
+                )
+
+    @api.constrains("users_to_exclude_ids", "users_to_include_ids")
+    def _check_users_exclude_include(self):
+        for rule in self:
+            if rule.users_to_exclude_ids and rule.users_to_include_ids:
+                raise ValidationError(
+                    _(
+                        "You can only set up 'Users to Exclude' "
+                        "or 'Users to Include', not both."
                     )
                 )
 
@@ -292,7 +311,7 @@ class AuditlogRule(models.Model):
         """Instanciate a create method that log its calls."""
         self.ensure_one()
         log_type = self.log_type
-        users_to_exclude = self.mapped("users_to_exclude_ids")
+        users_to_exclude = self._get_users_to_exclude()
 
         @api.model_create_multi
         @api.returns("self", lambda value: value.id)
@@ -357,7 +376,7 @@ class AuditlogRule(models.Model):
         """Instanciate a read method that log its calls."""
         self.ensure_one()
         log_type = self.log_type
-        users_to_exclude = self.mapped("users_to_exclude_ids")
+        users_to_exclude = self._get_users_to_exclude()
 
         def read(self, fields=None, load="_classic_read", **kwargs):
             result = read.origin(self, fields, load, **kwargs)
@@ -396,7 +415,7 @@ class AuditlogRule(models.Model):
         """Instanciate a write method that log its calls."""
         self.ensure_one()
         log_type = self.log_type
-        users_to_exclude = self.mapped("users_to_exclude_ids")
+        users_to_exclude = self._get_users_to_exclude()
 
         def write_full(self, vals, **kwargs):
             self = self.with_context(auditlog_disabled=True)
@@ -464,7 +483,7 @@ class AuditlogRule(models.Model):
         """Instanciate an unlink method that log its calls."""
         self.ensure_one()
         log_type = self.log_type
-        users_to_exclude = self.mapped("users_to_exclude_ids")
+        users_to_exclude = self._get_users_to_exclude()
 
         def unlink_full(self, **kwargs):
             self = self.with_context(auditlog_disabled=True)
@@ -791,3 +810,13 @@ class AuditlogRule(models.Model):
         if self.env.registry.ready and not self.env.context.get("import_file"):
             # notify other workers
             self.env.registry.registry_invalidated = True
+
+    def _get_users_to_exclude(self):
+        """Get the users to exclude bases on the
+        users_to_exclude_ids or users_to_include_ids"""
+        users_to_exclude = self.mapped("users_to_exclude_ids")
+        if self.users_to_include_ids:
+            all_users = self.env["res.users"].with_context(active_test=False).search([])
+            users_to_include = self.mapped("users_to_include_ids")
+            users_to_exclude = all_users - users_to_include
+        return users_to_exclude

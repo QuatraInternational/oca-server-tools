@@ -480,6 +480,7 @@ class AuditLogRuleTestForUserFields(TransactionCase):
         )
 
         cls.users_to_exclude_ids = cls.user.id
+        cls.users_to_include_ids = cls.user.id
 
         # creating auditlog.rule
         cls.auditlog_rule = (
@@ -713,6 +714,105 @@ class AuditLogRuleTestForUserFields(TransactionCase):
                 {
                     "fields_to_exclude_ids": [(4, self.fields_to_exclude_ids)],
                     "fields_to_include_ids": [(4, self.fields_to_include_ids)],
+                }
+            )
+
+    def test_10_AuditlogFull_user_include_write_log(self):
+        # Updating users_to_include_ids
+        self.auditlog_rule2.users_to_include_ids = [[4, self.users_to_exclude_ids]]
+
+        # Update user record with included user (should create log)
+        self.testuser.with_user(self.user.id).with_context(
+            tracking_disable=True
+        ).sudo().write({"login": "updated_by_included_user"})
+
+        # Checking write log is created for included user
+        write_log_record = self.auditlog_log.search(
+            [
+                ("model_id", "=", self.auditlog_rule2.model_id.id),
+                ("method", "=", "write"),
+                ("res_id", "=", self.testuser.id),
+                ("user_id", "=", self.user.id),
+            ]
+        ).ensure_one()
+
+        self.assertTrue(write_log_record)
+
+        # Removing created log record
+        write_log_record.unlink()
+
+    def test_11_AuditlogFull_user_include_create_log(self):
+        # Updating users_to_include_ids
+        self.auditlog_rule2.users_to_include_ids = [[4, self.users_to_exclude_ids]]
+        # Creating new res.users with included user (should create log)
+        testuser_included = (
+            self.env["res.users"]
+            .with_context(no_reset_password=True, tracking_disable=True)
+            .with_user(self.user.id)
+            .sudo()
+            .create(
+                {
+                    "name": "Test User Included",
+                    "login": "testuser_included",
+                }
+            )
+        )
+
+        # Checking create log is created for included user
+        create_log_record = self.auditlog_log.search(
+            [
+                ("model_id", "=", self.auditlog_rule2.model_id.id),
+                ("method", "=", "create"),
+                ("res_id", "=", testuser_included.id),
+                ("user_id", "=", self.user.id),
+            ]
+        ).ensure_one()
+        self.assertTrue(create_log_record)
+
+        # Removing created log record
+        create_log_record.unlink()
+
+    def test_12_AuditlogFull_user_include_unlink_log(self):
+        # Updating users_to_include_ids
+        self.auditlog_rule2.users_to_include_ids = [[4, self.users_to_exclude_ids]]
+        # Create a test user first
+        testuser_for_unlink = (
+            self.env["res.users"]
+            .with_context(no_reset_password=True, tracking_disable=True)
+            .create(
+                {
+                    "name": "Test User For Unlink",
+                    "login": "testuser_for_unlink",
+                }
+            )
+        )
+        user_id = testuser_for_unlink.id
+
+        # Removing testuser with included user (should create log)
+        testuser_for_unlink.with_user(self.user.id).sudo().unlink()
+
+        # Checking delete log is created for included user
+        delete_log_record = self.auditlog_log.search(
+            [
+                ("model_id", "=", self.auditlog_rule2.model_id.id),
+                ("method", "=", "unlink"),
+                ("res_id", "=", user_id),
+                ("user_id", "=", self.user.id),
+            ]
+        ).ensure_one()
+        self.assertTrue(delete_log_record)
+
+        # Removing created log record
+        delete_log_record.unlink()
+
+    def test_13_AuditlogFull_user_include_exclude_error(self):
+        # users_to_exclude_ids and users_to_include_ids
+        # may not be enabled at the same time
+        with self.assertRaises(ValidationError):
+            self.auditlog_rule2.write(
+                {
+                    "users_to_exclude_ids": [(4, self.users_to_exclude_ids)],
+                    "users_to_include_ids": [(4, self.users_to_include_ids)],
                 }
             )
 
