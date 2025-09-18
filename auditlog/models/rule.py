@@ -539,9 +539,10 @@ class AuditlogRule(models.Model):
         {RES_ID: {'FIELD': VALUE, ...}}
         """
         self.ensure_one()
+        logs = self.env["auditlog.log"]
         user = self.env["res.users"].browse(uid)
         if not self._logging_enabled_for_user(user):
-            return
+            return logs
 
         if old_values is None:
             old_values = EMPTY_DICT
@@ -596,7 +597,8 @@ class AuditlogRule(models.Model):
                     fields_to_exclude,
                 )
             if method == "unlink" or log_vals.get("line_ids", {}):
-                log_model.create(log_vals)
+                logs += log_model.create(log_vals)
+        return logs
 
     def _get_field(self, model_id, field_name):
         model = self.env["ir.model"].sudo().browse(model_id)
