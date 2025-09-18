@@ -515,6 +515,11 @@ class AuditlogRule(models.Model):
 
         return export_data
 
+    def _get_fields_to_exclude(self):
+        """Hook to determine what fields to exclude"""
+        self.ensure_one()
+        return self.fields_to_exclude_ids.mapped("name")
+
     def _logging_enabled_for_user(self, user):
         """Hook to determine if logging is enabled for the user"""
         self.ensure_one()
@@ -547,8 +552,7 @@ class AuditlogRule(models.Model):
         http_session_model = self.env["auditlog.http.session"]
         model_model = self.env[res_model]
         model_id = self.pool._auditlog_model_cache[res_model]
-        auditlog_rule = self.env["auditlog.rule"].search([("model_id", "=", model_id)])
-        fields_to_exclude = auditlog_rule.fields_to_exclude_ids.mapped("name")
+        fields_to_exclude = self._get_fields_to_exclude()
 
         vals = {
             "model_id": model_id,
