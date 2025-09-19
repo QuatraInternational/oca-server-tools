@@ -45,12 +45,13 @@ class InMemoryTransport(HttpTransport):
         self.envelopes.append(envelope)
 
     def has_event(self, event_level, event_msg):
-        for event in self.envelopes:
+        for envelope in self.envelopes:
+            event = envelope.get_event()
             if (
-                event.get_event().get("level") == event_level
-                and event.get_event().get("logentry", {}).get("message") == event_msg
+                event.get("level") == event_level
+                and event.get("logentry", {}).get("message") == event_msg
             ):
-                return event.get_event()
+                return event
         return False
 
     def flush(self, *args, **kwargs):
