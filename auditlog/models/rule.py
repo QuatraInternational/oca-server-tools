@@ -515,6 +515,11 @@ class AuditlogRule(models.Model):
 
         return export_data
 
+    def _logging_enabled_for_user(self, user):
+        """Hook to determine if logging is enabled for the user"""
+        self.ensure_one()
+        return user not in self.users_to_exclude_ids
+
     def create_logs(
         self,
         uid,
@@ -530,7 +535,7 @@ class AuditlogRule(models.Model):
         """
         self.ensure_one()
         user = self.env["res.users"].browse(uid)
-        if user in self.users_to_exclude_ids:
+        if not self._logging_enabled_for_user(user):
             return
 
         if old_values is None:
