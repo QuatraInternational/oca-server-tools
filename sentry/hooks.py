@@ -5,10 +5,15 @@ import logging
 import os
 import warnings
 from collections import abc
+from datetime import datetime
 
 import odoo.http
 from odoo.service.server import server
+from odoo.sql_db import Cursor
 from odoo.tools import config as odoo_config
+from odoo.tools.sql import SQL
+
+from odoo.addons.base.models.ir_cron import ir_cron
 
 from . import const
 from .logutils import (
@@ -22,6 +27,7 @@ _logger = logging.getLogger(__name__)
 HAS_SENTRY_SDK = True
 try:
     import sentry_sdk
+    from sentry_sdk import start_span, start_transaction
     from sentry_sdk.integrations.logging import ignore_logger
     from sentry_sdk.integrations.threading import ThreadingIntegration
     from sentry_sdk.integrations.wsgi import SentryWsgiMiddleware
@@ -31,6 +37,8 @@ except ImportError:  # pragma: no cover
         "Cannot import 'sentry-sdk'.\
                         Please make sure it is installed."
     )  # pragma: no cover
+
+TIMEFMT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 
 def before_send(event, hint):
@@ -100,6 +108,86 @@ def get_config(key, default=None):
     )
 
 
+# HTTP transactions
+# Patch _serve_db so a Sentry transaction is started for http requests
+orig_serve_db = odoo.http.Request._serve_db
+
+
+def wrapped_serve_db(self, *args, **kwargs):
+    with start_transaction(op="http.server", name=self.httprequest.path):
+        return orig_serve_db(self, *args, **kwargs)
+
+
+if get_config("traces_enabled", False):
+    odoo.http.Request._serve_db = wrapped_serve_db
+
+# Cron transactions
+# Patch ir_cron._callback so a Sentry transaction is started for crons
+orig_callback = ir_cron._callback
+
+
+def wrapped_callback(self, cron_name, server_action_id, *args, **kwargs):
+    # Crons can be called from xmlrpcs, when that happens, edit the existing transaction
+    scope = sentry_sdk.get_current_scope()
+    if scope.transaction:
+        scope.set_transaction_name(cron_name)
+        return orig_callback(
+            self,
+            cron_name,
+            server_action_id,
+            *args,
+            **kwargs,
+        )
+
+    with start_transaction(op="cron", name=cron_name):
+        return orig_callback(
+            self,
+            cron_name,
+            server_action_id,
+            *args,
+            **kwargs,
+        )
+
+
+if get_config("traces_enabled", False):
+    ir_cron._callback = wrapped_callback
+
+# SQL spans
+# Patch cr.execute so all queries are added to the current transaction as a span
+if get_config("traces_enabled", False) and not getattr(
+    Cursor, "_sentry_patched", False
+):
+    original_execute = Cursor.execute
+
+    def wrapped_execute(self, query, *args, **kwargs):
+        if isinstance(query, SQL):
+            query_string = query.code
+        else:
+            query_string = str(query)
+        with start_span(op="db.query", name=query_string.replace("\n", "")):
+            return original_execute(self, query, *args, **kwargs)
+
+    Cursor.execute = wrapped_execute
+    Cursor._sentry_patched = True
+
+
+def before_send_transaction(event, hint):
+    """Only send transactions that take longer than one second"""
+    cxtest = get_extra_context(odoo.http.request)
+    info_request = ["tags", "user", "extra", "request"]
+
+    for item in info_request:
+        info_item = event.setdefault(item, {})
+        info_item.update(cxtest.setdefault(item, {}))
+
+    start = datetime.strptime(event.get("start_timestamp"), TIMEFMT)
+    end = datetime.strptime(event.get("timestamp"), TIMEFMT)
+
+    if (end - start).total_seconds() >= 1:
+        return event
+    return None
+
+
 def initialize_sentry():
     """Setup an instance of :class:`sentry_sdk.Client`.
     :param config: Sentry configuration
@@ -150,6 +238,10 @@ def initialize_sentry():
     ]
     # Remove logging_level, since in sentry_sdk is include in 'integrations'
     del options["logging_level"]
+
+    # Quatra Tracing options
+    if get_config("traces_enabled", False):
+        options["before_send_transaction"] = before_send_transaction
 
     client = sentry_sdk.init(**options)
 
