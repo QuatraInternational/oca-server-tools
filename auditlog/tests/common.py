@@ -21,9 +21,9 @@ class AuditLogRuleCommon(TransactionCase):
         for rule in cls.env["auditlog.rule"].search([]):
             try:
                 rule.unsubscribe()
-            except KeyError:
-                # Model not loaded yet
-                continue
+            except KeyError:  # pragma: no cover
+                continue  # Model not loaded yet
+
         # Assert no patched methods remain
         for model in cls.models:
             for method in ["create", "read", "write", "unlink"]:
