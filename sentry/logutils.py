@@ -49,6 +49,10 @@ def get_extra_context(request):
         }
         if request.httprequest:
             ctx.update({"request": get_request_info(request.httprequest)})
+            # Odoo has run the environ through ProxyFix by now, so this is the
+            # client rather than the proxy. Without it Sentry falls back to
+            # geolocating whoever sent the event, which is the server itself.
+            ctx["user"]["ip_address"] = request.httprequest.remote_addr
     return ctx
 
 
